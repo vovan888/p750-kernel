@@ -1830,13 +1830,13 @@ static void handle_ep0(struct pxa_udc *udc, int fifo_irq, int opc_irq)
 	struct pxa27x_request	*req = NULL;
 	int			completed = 0;
 
+	if (!list_empty(&ep->queue))
+		req = list_entry(ep->queue.next, struct pxa27x_request, queue);
+
 	udccsr0 = udc_ep_readl(ep, UDCCSR);
 	ep_dbg(ep, "state=%s, req=%p, udccsr0=0x%03x, udcbcr=%d, irq_msk=%x\n",
 		EP0_STNAME(udc), req, udccsr0, udc_ep_readl(ep, UDCBCR),
 		(fifo_irq << 1 | opc_irq));
-
-	if (!list_empty(&ep->queue))
-		req = list_entry(ep->queue.next, struct pxa27x_request, queue);
 
 	if (udccsr0 & UDCCSR0_SST) {
 		ep_dbg(ep, "clearing stall status\n");
