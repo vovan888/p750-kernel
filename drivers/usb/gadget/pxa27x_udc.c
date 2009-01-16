@@ -2109,10 +2109,10 @@ static void irq_handle_data(int irq, struct pxa_udc *udc)
 	}
 
 	for (i = 16; udcisr1 != 0 && i < 24; udcisr1 >>= 2, i++) {
-		udc_writel(udc, UDCISR1, UDCISR_INT(i - 16, UDCISR_INT_MASK));
 		if (!(udcisr1 & UDCISR_INT_MASK))
 			continue;
 
+		udc_writel(udc, UDCISR1, UDCISR_INT(i - 16, UDCISR_INT_MASK));
 		ep = &udc->pxa_ep[i];
 		ep->stats.irqs++;
 		handle_ep(ep);
