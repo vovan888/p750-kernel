@@ -2365,6 +2365,7 @@ static int __exit pxa_udc_remove(struct platform_device *_dev)
 	platform_set_drvdata(_dev, NULL);
 	the_controller = NULL;
 	clk_put(udc->clk);
+	iounmap(udc->regs);
 
 	return 0;
 }
