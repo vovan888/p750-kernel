@@ -819,9 +819,7 @@ static void ep_end_in_req(struct pxa_ep *ep, struct pxa27x_request *req)
  */
 static void ep0_end_in_req(struct pxa_ep *ep, struct pxa27x_request *req)
 {
-	struct pxa_udc *udc = ep->dev;
-
-	set_ep0state(udc, IN_STATUS_STAGE);
+	set_ep0state(ep->dev, IN_STATUS_STAGE);
 	ep_end_in_req(ep, req);
 }
 
@@ -1227,30 +1225,26 @@ static int pxa_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 	struct udc_usb_ep	*udc_usb_ep;
 	struct pxa27x_request	*req;
 	unsigned long		flags;
-	int			rc;
+	int			rc = -EINVAL;
 
 	if (!_ep)
-		return -EINVAL;
+		return rc;
 	udc_usb_ep = container_of(_ep, struct udc_usb_ep, usb_ep);
 	ep = udc_usb_ep->pxa_ep;
 	if (!ep || is_ep0(ep))
-		return -EINVAL;
+		return rc;
 
 	spin_lock_irqsave(&ep->lock, flags);
 
 	/* make sure it's actually queued on this endpoint */
 	list_for_each_entry(req, &ep->queue, queue) {
-		if (&req->req == _req)
+		if (&req->req == _req) {
+			req_done(ep, req, -ECONNRESET);
+			rc = 0;
 			break;
+		}
 	}
 
-	rc = -EINVAL;
-	if (&req->req != _req)
-		goto out;
-
-	rc = 0;
-	req_done(ep, req, -ECONNRESET);
-out:
 	spin_unlock_irqrestore(&ep->lock, flags);
 	return rc;
 }
