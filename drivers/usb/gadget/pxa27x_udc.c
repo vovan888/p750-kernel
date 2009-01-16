@@ -749,13 +749,13 @@ static void req_done(struct pxa_ep *ep, struct pxa27x_request *req, int status)
 }
 
 /**
- * ep_end_out_req - Ends control endpoint in request
+ * ep_end_out_req - Ends endpoint out request
  * @ep: physical endpoint
  * @req: pxa request
  *
  * Context: ep->lock held
  *
- * Ends endpoint in request (completes usb request).
+ * Ends endpoint out request (completes usb request).
  */
 static void ep_end_out_req(struct pxa_ep *ep, struct pxa27x_request *req)
 {
@@ -764,13 +764,13 @@ static void ep_end_out_req(struct pxa_ep *ep, struct pxa27x_request *req)
 }
 
 /**
- * ep0_end_out_req - Ends control endpoint in request (ends data stage)
+ * ep0_end_out_req - Ends control endpoint out request (ends data stage)
  * @ep: physical endpoint
  * @req: pxa request
  *
  * Context: ep->lock held
  *
- * Ends control endpoint in request (completes usb request), and puts
+ * Ends control endpoint out request (completes usb request), and puts
  * control endpoint into idle state
  */
 static void ep0_end_out_req(struct pxa_ep *ep, struct pxa27x_request *req)
@@ -781,13 +781,13 @@ static void ep0_end_out_req(struct pxa_ep *ep, struct pxa27x_request *req)
 }
 
 /**
- * ep_end_in_req - Ends endpoint out request
+ * ep_end_in_req - Ends endpoint in request
  * @ep: physical endpoint
  * @req: pxa request
  *
  * Context: ep->lock held
  *
- * Ends endpoint out request (completes usb request).
+ * Ends endpoint in request (completes usb request).
  */
 static void ep_end_in_req(struct pxa_ep *ep, struct pxa27x_request *req)
 {
@@ -796,13 +796,13 @@ static void ep_end_in_req(struct pxa_ep *ep, struct pxa27x_request *req)
 }
 
 /**
- * ep0_end_in_req - Ends control endpoint out request (ends data stage)
+ * ep0_end_in_req - Ends control endpoint in request (ends data stage)
  * @ep: physical endpoint
  * @req: pxa request
  *
  * Context: ep->lock held
  *
- * Ends control endpoint out request (completes usb request), and puts
+ * Ends control endpoint in request (completes usb request), and puts
  * control endpoint into status state
  */
 static void ep0_end_in_req(struct pxa_ep *ep, struct pxa27x_request *req)
@@ -1169,7 +1169,7 @@ static int pxa_ep_queue(struct usb_ep *_ep, struct usb_request *_req,
 				ep_end_in_req(ep, req);
 			} else {
 				ep_err(ep, "got a request of %d bytes while"
-					"in state WATI_ACK_SET_CONF_INTERF\n",
+					"in state WAIT_ACK_SET_CONF_INTERF\n",
 					length);
 				ep_del_request(ep, req);
 				rc = -EL2HLT;
