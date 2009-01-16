@@ -1192,9 +1192,14 @@ static int pxa_ep_queue(struct usb_ep *_ep, struct usb_request *_req,
 					ep0_end_in_req(ep, req);
 			break;
 		case OUT_DATA_STAGE:
-			if ((length == 0) || !epout_has_pkt(ep))
-				if (read_ep0_fifo(ep, req))
-					ep0_end_out_req(ep, req);
+			if (length == 0 || read_ep0_fifo(ep, req)) {
+				if (length == 0) {
+					/* we need to make up a status packet */
+					udc_ep_writeb(ep, UDCDR, 0);
+					udc_ep_writel(ep, UDCCSR, UDCCSR0_IPR);
+				}
+				ep0_end_out_req(ep, req);
+			}
 			break;
 		default:
 			ep_err(ep, "odd state %s to send me a request\n",
