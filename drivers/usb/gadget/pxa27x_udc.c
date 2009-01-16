@@ -90,6 +90,7 @@ static struct pxa_udc *the_controller;
 
 static void handle_ep(struct pxa_ep *ep);
 static int pxa_ep_disable(struct usb_ep *_ep);
+static void udc_setup_announce_work(struct work_struct *work);
 
 /*
  * Debug filesystem
@@ -577,6 +578,18 @@ static void set_ep0state(struct pxa_udc *udc, int state)
 static void ep0_idle(struct pxa_udc *dev)
 {
 	set_ep0state(dev, WAIT_FOR_SETUP);
+}
+
+/**
+ * ep0_stall - Put control endpoint into stall state
+ * @dev: udc device
+ */
+static void ep0_stall(struct pxa_udc *dev)
+{
+	struct pxa_ep *ep = &dev->pxa_ep[0];
+	ep_dbg(ep, "protocol STALL, udccsr0=%03x\n", udc_ep_readl(ep, UDCCSR));
+	udc_ep_writel(ep, UDCCSR, UDCCSR0_FST | UDCCSR0_FTF);
+	set_ep0state(dev, STALL);
 }
 
 /**
@@ -1103,9 +1116,7 @@ static int write_ep0_fifo(struct pxa_ep *ep, struct pxa27x_request *req)
  * @_req: usb request
  * @gfp_flags: flags
  *
- * Context: normally called when !in_interrupt, but callable when in_interrupt()
- * in the special case of ep0 setup :
- *   (irq->handle_ep0_ctrl_req->gadget_setup->pxa_ep_queue)
+ * Context: !in_interrupt
  *
  * Returns 0 if succedeed, error otherwise
  */
@@ -1185,6 +1196,7 @@ static int pxa_ep_queue(struct usb_ep *_ep, struct usb_request *_req,
 				rc = -EL2HLT;
 			}
 			ep0_idle(ep->dev);
+			complete(&dev->conf_intf_compl);
 			break;
 		case IN_DATA_STAGE:
 			if (!ep_is_full(ep))
@@ -1552,6 +1564,11 @@ static __init void udc_init_data(struct pxa_udc *dev)
 	int i;
 	struct pxa_ep *ep;
 
+	/* control request queue init */
+	spin_lock_init(&dev->ctrlreq_lock);
+	init_completion(&dev->conf_intf_compl);
+	INIT_WORK(&dev->ctrlreq_work, udc_setup_announce_work);
+
 	/* device/ep0 records init */
 	INIT_LIST_HEAD(&dev->gadget.ep_list);
 	INIT_LIST_HEAD(&dev->gadget.ep0->ep_list);
@@ -1726,10 +1743,8 @@ EXPORT_SYMBOL(usb_gadget_unregister_driver);
 /**
  * handle_ep0_ctrl_req - handle control endpoint control request
  * @udc: udc device
- * @req: control request
  */
-static void handle_ep0_ctrl_req(struct pxa_udc *udc,
-				struct pxa27x_request *req)
+static void handle_ep0_ctrl_req(struct pxa_udc *udc)
 {
 	struct pxa_ep *ep = &udc->pxa_ep[0];
 	union {
@@ -1738,8 +1753,7 @@ static void handle_ep0_ctrl_req(struct pxa_udc *udc,
 	} u;
 	int i;
 	int have_extrabytes = 0;
-
-	nuke(ep, -EPROTO);
+	struct usb_ctrlrequest	*req;
 
 	/* read SETUP packet */
 	for (i = 0; i < 2; i++) {
@@ -1754,32 +1768,92 @@ static void handle_ep0_ctrl_req(struct pxa_udc *udc,
 		ep_err(ep, "wrong to have extra bytes for setup : 0x%08x\n", i);
 	}
 
-	ep_dbg(ep, "SETUP %02x.%02x v%04x i%04x l%04x\n",
-		u.r.bRequestType, u.r.bRequest,
-		le16_to_cpu(u.r.wValue), le16_to_cpu(u.r.wIndex),
-		le16_to_cpu(u.r.wLength));
 	if (unlikely(have_extrabytes))
 		goto stall;
 
-	if (u.r.bRequestType & USB_DIR_IN)
-		set_ep0state(udc, IN_DATA_STAGE);
-	else
-		set_ep0state(udc, OUT_DATA_STAGE);
+	req = &udc->ctrlreq[udc->ctrlreq_put++];
+	udc->ctrlreq_put %= NR_USB_CTRL_REQ;
+	*req = u.r;
+	schedule_work(&udc->ctrlreq_work);
 
-	/* Tell UDC to enter Data Stage */
-	udc_ep_writel(ep, UDCCSR, UDCCSR0_SA | UDCCSR0_OPC);
-
-	i = udc->driver->setup(&udc->gadget, &u.r);
-	if (i < 0)
-		goto stall;
-out:
 	return;
+
 stall:
-	ep_dbg(ep, "protocol STALL, udccsr0=%03x err %d\n",
-		udc_ep_readl(ep, UDCCSR), i);
-	udc_ep_writel(ep, UDCCSR, UDCCSR0_FST | UDCCSR0_FTF);
-	set_ep0state(udc, STALL);
-	goto out;
+	ep0_stall(udc);
+}
+
+/**
+ * udc_setup_announce_work - handle dispatching control request to gadget
+ * @work: work struct embedded in udc
+ */
+static void udc_setup_announce_work(struct work_struct *work)
+{
+	int i;
+	static int real_req = 0;
+	bool set_intf_conf;
+	struct pxa_udc *udc = container_of(work, struct pxa_udc, ctrlreq_work);
+	struct pxa_ep *ep = &udc->pxa_ep[0];
+	unsigned long flags;
+
+	/* run through the circular list, dispatching setup control items */
+	while (udc->ctrlreq_get != udc->ctrlreq_put) {
+		/* get next item */
+		spin_lock_irqsave(&udc->ctrlreq_lock, flags);
+		struct usb_ctrlrequest *req = &udc->ctrlreq[udc->ctrlreq_get];
+		udc->ctrlreq_get++;
+		udc->ctrlreq_get %= NR_USB_CTRL_REQ;
+		spin_unlock_irqrestore(&udc->ctrlreq_lock, flags);
+
+		ep_dbg(ep, "SETUP %02x.%02x v%04x i%04x l%04x\n",
+				req->bRequestType, req->bRequest,
+				le16_to_cpu(req->wValue), le16_to_cpu(req->wIndex),
+				le16_to_cpu(req->wLength));
+
+		/* if request is SET_CONF or SET_INTF, we will need to wait */
+		set_intf_conf = req->bRequest == USB_REQ_SET_CONFIGURATION ||
+				req->bRequest == USB_REQ_SET_INTERFACE;
+		/* count the number of non-intf/conf items as "real" */
+		if (!set_intf_conf)
+			real_req++;
+		/*
+		 * if we are waiting for an ACK from gadget and there are few
+		 * real requests waiting, then pause here
+		 */
+		if (udc->ep0state == WAIT_ACK_SET_CONF_INTERF && real_req < 2) {
+			wait_for_completion_timeout(&udc->conf_intf_compl,
+					msecs_to_jiffies(100));
+		}
+		/* kill any outstanding urbs */
+		nuke(ep, -EPROTO);
+		/* dispatch */
+		if (set_intf_conf) {
+			if (req->bRequest == USB_REQ_SET_CONFIGURATION) {
+				udc->config = req->wValue;
+				udc->last_interface = 0;
+				udc->last_alternate = 0;
+			}
+			else {
+				udc->last_interface = req->wIndex;
+				udc->last_alternate = req->wValue;
+			}
+			set_ep0state(udc, WAIT_ACK_SET_CONF_INTERF);
+		}
+		else {
+			if (req->bRequestType & USB_DIR_IN)
+				set_ep0state(udc, IN_DATA_STAGE);
+			else
+				set_ep0state(udc, OUT_DATA_STAGE);
+			/* Tell UDC to enter Data Stage */
+			udc_ep_writel(ep, UDCCSR, UDCCSR0_SA | UDCCSR0_OPC);
+		}
+
+		/* send to gadget */
+		i = udc->driver->setup(&udc->gadget, req);
+		if (!set_intf_conf && i < 0) {
+			ep_dbg(ep, "err %d\n", i);
+			ep0_stall(udc);
+		}
+	}
 }
 
 /**
@@ -1867,7 +1941,7 @@ static void handle_ep0(struct pxa_udc *udc, int fifo_irq, int opc_irq)
 	case SETUP_STAGE:
 		udccsr0 &= UDCCSR0_CTRL_REQ_MASK;
 		if (likely(udccsr0 == UDCCSR0_CTRL_REQ_MASK))
-			handle_ep0_ctrl_req(udc, req);
+			handle_ep0_ctrl_req(udc);
 		break;
 	case IN_DATA_STAGE:			/* GET_DESCRIPTOR */
 		if (epout_has_pkt(ep))
@@ -1963,22 +2037,18 @@ static void handle_ep(struct pxa_ep *ep)
  */
 static void pxa27x_change_configuration(struct pxa_udc *udc, int config)
 {
-	struct usb_ctrlrequest req ;
+	struct usb_ctrlrequest *req;
 
-	dev_dbg(udc->dev, "config=%d\n", config);
+	req = &udc->ctrlreq[udc->ctrlreq_put++];
+	udc->ctrlreq_put %= NR_USB_CTRL_REQ;
 
-	udc->config = config;
-	udc->last_interface = 0;
-	udc->last_alternate = 0;
+	req->bRequestType = 0;
+	req->bRequest = USB_REQ_SET_CONFIGURATION;
+	req->wValue = config;
+	req->wIndex = 0;
+	req->wLength = 0;
 
-	req.bRequestType = 0;
-	req.bRequest = USB_REQ_SET_CONFIGURATION;
-	req.wValue = config;
-	req.wIndex = 0;
-	req.wLength = 0;
-
-	set_ep0state(udc, WAIT_ACK_SET_CONF_INTERF);
-	udc->driver->setup(&udc->gadget, &req);
+	schedule_work(&udc->ctrlreq_work);
 }
 
 /**
@@ -1992,21 +2062,18 @@ static void pxa27x_change_configuration(struct pxa_udc *udc, int config)
  */
 static void pxa27x_change_interface(struct pxa_udc *udc, int iface, int alt)
 {
-	struct usb_ctrlrequest  req;
+	struct usb_ctrlrequest *req;
 
-	dev_dbg(udc->dev, "interface=%d, alternate setting=%d\n", iface, alt);
+	req = &udc->ctrlreq[udc->ctrlreq_put++];
+	udc->ctrlreq_put %= NR_USB_CTRL_REQ;
 
-	udc->last_interface = iface;
-	udc->last_alternate = alt;
+	req->bRequestType = USB_RECIP_INTERFACE;
+	req->bRequest = USB_REQ_SET_INTERFACE;
+	req->wValue = alt;
+	req->wIndex = iface;
+	req->wLength = 0;
 
-	req.bRequestType = USB_RECIP_INTERFACE;
-	req.bRequest = USB_REQ_SET_INTERFACE;
-	req.wValue = alt;
-	req.wIndex = iface;
-	req.wLength = 0;
-
-	set_ep0state(udc, WAIT_ACK_SET_CONF_INTERF);
-	udc->driver->setup(&udc->gadget, &req);
+	schedule_work(&udc->ctrlreq_work);
 }
 
 /*
@@ -2286,9 +2353,14 @@ static int __exit pxa_udc_remove(struct platform_device *_dev)
 {
 	struct pxa_udc *udc = platform_get_drvdata(_dev);
 
+	complete_all(&udc->conf_intf_compl);
+
 	usb_gadget_unregister_driver(udc->driver);
 	free_irq(udc->irq, udc);
 	pxa_cleanup_debugfs(udc);
+
+	/* cancel work */
+	cancel_work_sync(&udc->ctrlreq_work);
 
 	platform_set_drvdata(_dev, NULL);
 	the_controller = NULL;
@@ -2329,6 +2401,9 @@ static int pxa_udc_suspend(struct platform_device *_dev, pm_message_t state)
 		ep_dbg(ep, "udccsr:0x%03x, udccr:0x%x\n",
 				ep->udccsr_value, ep->udccr_value);
 	}
+
+	/* finish work before sleeping */
+	flush_work(&udc->ctrlreq_work);
 
 	udc_disable(udc);
 

@@ -25,6 +25,7 @@
 
 #include <linux/types.h>
 #include <linux/spinlock.h>
+#include <linux/completion.h>
 #include <linux/io.h>
 
 /*
@@ -411,6 +412,7 @@ struct udc_stats {
 
 #define NR_USB_ENDPOINTS (1 + 5)	/* ep0 + ep1in-bulk + .. + ep3in-iso */
 #define NR_PXA_ENDPOINTS (1 + 14)	/* ep0 + epA + epB + .. + epX */
+#define NR_USB_CTRL_REQ  (4)
 
 /**
  * struct pxa_udc - udc structure
@@ -453,6 +455,13 @@ struct pxa_udc {
 	unsigned				config:2;
 	unsigned				last_interface:3;
 	unsigned				last_alternate:3;
+
+	struct work_struct 		ctrlreq_work;
+	struct usb_ctrlrequest	ctrlreq[NR_USB_CTRL_REQ];
+	unsigned 				ctrlreq_get;
+	unsigned 				ctrlreq_put;
+	spinlock_t				ctrlreq_lock;		/* Protects the request queue */
+	struct completion		conf_intf_compl;
 
 #ifdef CONFIG_PM
 	unsigned				udccsr0;
