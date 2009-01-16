@@ -19,6 +19,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
+
+/* #define VERBOSE_DEBUG */
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
@@ -86,6 +89,7 @@ static const char driver_name[] = "pxa27x_udc";
 static struct pxa_udc *the_controller;
 
 static void handle_ep(struct pxa_ep *ep);
+static int pxa_ep_disable(struct usb_ep *_ep);
 
 /*
  * Debug filesystem
@@ -395,7 +399,7 @@ static struct pxa_ep *find_pxa_ep(struct pxa_udc *udc,
  * Context: in_interrupt()
  *
  * Updates all pxa_ep fields in udc_usb_ep structures, if this field was
- * previously set up (and is not NULL). The update is necessary is a
+ * previously set up (and is not NULL). The update is necessary if a
  * configuration change or altsetting change was issued by the USB host.
  */
 static void update_pxa_ep_matches(struct pxa_udc *udc)
@@ -405,8 +409,16 @@ static void update_pxa_ep_matches(struct pxa_udc *udc)
 
 	for (i = 1; i < NR_USB_ENDPOINTS; i++) {
 		udc_usb_ep = &udc->udc_usb_ep[i];
-		if (udc_usb_ep->pxa_ep)
-			udc_usb_ep->pxa_ep = find_pxa_ep(udc, udc_usb_ep);
+		if (udc_usb_ep->pxa_ep) {
+			struct pxa_ep *ep = find_pxa_ep(udc, udc_usb_ep);
+			if (ep) {
+				udc_usb_ep->pxa_ep = ep;
+			}
+			else {
+				ep_warn(udc_usb_ep->pxa_ep, "new config drops ep; disabling now\n");
+				pxa_ep_disable(&udc_usb_ep->usb_ep);
+			}
+		}
 	}
 }
 
