@@ -82,3 +82,8 @@ obj-$(CONFIG_MACH_ARMCORE) += cm-x2xx-pci.o
 endif
 
 obj-$(CONFIG_TOSA_BT)		+= tosa-bt.o
+
+obj-$(CONFIG_MACH_ASUSP750)	+= board-p750.o
+ifeq ($(CONFIG_RFKILL),y)
+obj-$(CONFIG_MACH_ASUSP750)	+= board-p750-rfkill.o
+endif

@@ -382,6 +382,20 @@ config MACH_EZX_E2
 	default y
 	depends on PXA_EZX
 
+
+config ARCH_ASUS_PXA27
+	bool "Asus PXA27x-based PDA"
+	select PXA27x
+	select IWMMXT
+	select HAVE_PWM
+
+config MACH_ASUSP750
+	bool "Asus P750"
+	default y
+	depends on ARCH_ASUS_PXA27
+	select TOUCHSCREEN_WM97XX
+	select HTC_EGPIO
+
 endmenu
 
 config PXA25x
@@ -437,5 +451,6 @@ config PXA_HAVE_BOARD_IRQS
 
 config PXA_HAVE_ISA_IRQS
 	bool
+
 
 endif
