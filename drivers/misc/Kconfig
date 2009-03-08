@@ -9,9 +9,27 @@ menuconfig MISC_DEVICES
 	  Say Y here to get to see options for device drivers from various
 	  different categories. This option alone does not add any kernel code.
 
+
 	  If you say N, all options in this submenu will be skipped and disabled.
 
 if MISC_DEVICES
+
+config ANDROID_PMEM
+	bool "Android pmem allocator"
+	default y
+
+config TIMED_OUTPUT
+	bool "Timed output class driver"
+	default y
+
+config TIMED_GPIO
+	bool "Android timed gpio driver"
+	depends on GENERIC_GPIO && TIMED_OUTPUT
+	default y
+
+config BINDER_IPC
+	tristate "Binder IPC Driver"
+	default y
 
 config ATMEL_PWM
 	tristate "Atmel AT32/AT91 PWM support"
@@ -499,5 +517,84 @@ config SGI_GRU_DEBUG
 	you are unsure, say N.
 
 source "drivers/misc/c2port/Kconfig"
+
+config KERNEL_DEBUGGER_CORE
+	bool "Kernel Debugger Core"
+	default n
+	---help---
+	  Generic kernel debugging command processor used by low level
+	  (interrupt context) platform-specific debuggers.
+
+config LOW_MEMORY_KILLER
+    tristate "Low Memory Killer"
+	  ---help---
+	  Register processes to be killed when memory is low.
+
+config LOGGER
+	bool "High-speed in-kernel logging driver"
+	default y
+
+config UID_STAT
+	bool "UID based statistics tracking exported to /proc/uid_stat"
+	default n
+
+config ANDROID_RAM_CONSOLE
+        bool "RAM buffer console"
+        default n
+
+config ANDROID_RAM_CONSOLE_ENABLE_VERBOSE
+        bool "Enable verbose console messages"
+        default y
+        depends on ANDROID_RAM_CONSOLE
+
+menuconfig ANDROID_RAM_CONSOLE_ERROR_CORRECTION
+        bool "Enable error correction"
+        default n
+        depends on ANDROID_RAM_CONSOLE
+        depends on !ANDROID_RAM_CONSOLE_EARLY_INIT
+        select REED_SOLOMON
+        select REED_SOLOMON_ENC8
+        select REED_SOLOMON_DEC8
+
+if ANDROID_RAM_CONSOLE_ERROR_CORRECTION
+
+config ANDROID_RAM_CONSOLE_ERROR_CORRECTION_DATA_SIZE
+        int "Data data size"
+        default 128
+        help
+          Must be a power of 2.
+
+config ANDROID_RAM_CONSOLE_ERROR_CORRECTION_ECC_SIZE
+        int "ECC size"
+        default 16
+
+config ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE
+        int "Symbol size"
+        default 8
+config ANDROID_RAM_CONSOLE_ERROR_CORRECTION_POLYNOMIAL
+        hex "Polynomial"
+        default 0x19 if (ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE = 4)
+        default 0x29 if (ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE = 5)
+        default 0x61 if (ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE = 6)
+        default 0x89 if (ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE = 7)
+        default 0x11d if (ANDROID_RAM_CONSOLE_ERROR_CORRECTION_SYMBOL_SIZE = 8)
+
+endif #ANDROID_RAM_CONSOLE_ERROR_CORRECTION
+
+config ANDROID_RAM_CONSOLE_EARLY_INIT
+        bool "Start ram console early"
+        default n
+        depends on ANDROID_RAM_CONSOLE
+
+config ANDROID_RAM_CONSOLE_EARLY_ADDR
+        hex "RAM console virtual address"
+        default 0
+        depends on ANDROID_RAM_CONSOLE_EARLY_INIT
+
+config ANDROID_RAM_CONSOLE_EARLY_SIZE
+        hex "RAM console buffer size"
+        default 0
+        depends on ANDROID_RAM_CONSOLE_EARLY_INIT
+
 
 endif # MISC_DEVICES
