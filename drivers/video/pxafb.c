@@ -69,6 +69,8 @@
 #define LCCR3_INVALID_CONFIG_MASK	(LCCR3_HSP | LCCR3_VSP |\
 					 LCCR3_PCD | LCCR3_BPP)
 
+#define C_CHANGE_DMA_BASE	(10)
+
 static void (*pxafb_backlight_power)(int);
 static void (*pxafb_lcd_power)(int, struct fb_var_screeninfo *);
 
@@ -309,7 +311,7 @@ static void pxafb_setmode(struct fb_var_screeninfo *var,
 	var->sync		= mode->sync;
 	var->grayscale		= mode->cmap_greyscale;
 	var->xres_virtual 	= var->xres;
-	var->yres_virtual	= var->yres;
+	var->yres_virtual	= var->yres * 2;
 }
 
 /*
@@ -350,7 +352,7 @@ static int pxafb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	var->xres_virtual =
 		max(var->xres_virtual, var->xres);
 	var->yres_virtual =
-		max(var->yres_virtual, var->yres);
+		max(var->yres_virtual, var->yres * 2);
 
 	/*
 	 * Setup the RGB parameters for this display.
@@ -425,6 +427,11 @@ static inline void pxafb_set_truecolor(u_int is_true_color)
  *	Set the user defined part of the display for the specified console
  */
 static int pxafb_set_par(struct fb_info *info)
+{
+	return 0;
+}
+
+static int pxafb_set_par_init(struct fb_info *info)
 {
 	struct pxafb_info *fbi = (struct pxafb_info *)info;
 	struct fb_var_screeninfo *var = &info->var;
@@ -516,6 +523,15 @@ static int pxafb_mmap(struct fb_info *info,
 	return -EINVAL;
 }
 
+static int pxafb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
+{
+	struct pxafb_info *fbi = (struct pxafb_info *)info;
+
+	fbi->fb.var.yoffset = var->yoffset;
+	pxafb_schedule_work(fbi, C_CHANGE_DMA_BASE);
+	return 0;
+}
+
 static struct fb_ops pxafb_ops = {
 	.owner		= THIS_MODULE,
 	.fb_check_var	= pxafb_check_var,
@@ -526,6 +542,7 @@ static struct fb_ops pxafb_ops = {
 	.fb_imageblit	= cfb_imageblit,
 	.fb_blank	= pxafb_blank,
 	.fb_mmap	= pxafb_mmap,
+	.fb_pan_display = pxafb_pan_display,
 };
 
 /*
@@ -1210,6 +1227,11 @@ static void set_ctrlr_state(struct pxafb_info *fbi, u_int state)
 			__pxafb_backlight_power(fbi, 1);
 		}
 		break;
+
+	case C_CHANGE_DMA_BASE:
+		fbi->dma_buff->dma_desc[DMA_UPPER].fsadr = fbi->screen_dma +
+			(fbi->fb.var.xres*fbi->fb.var.yoffset*fbi->fb.var.bits_per_pixel/8);
+	  break;
 	}
 	mutex_unlock(&fbi->ctrlr_lock);
 }
@@ -1362,6 +1384,7 @@ static void pxafb_decode_mode_info(struct pxafb_info *fbi,
 
 	for (i = 0; i < num_modes; i++) {
 		smemlen = modes[i].xres * modes[i].yres * modes[i].bpp / 8;
+		smemlen *= 2;
 		if (smemlen > fbi->fb.fix.smem_len)
 			fbi->fb.fix.smem_len = smemlen;
 	}
@@ -1440,7 +1463,7 @@ static struct pxafb_info * __devinit pxafb_init_fbinfo(struct device *dev)
 	fbi->fb.fix.type	= FB_TYPE_PACKED_PIXELS;
 	fbi->fb.fix.type_aux	= 0;
 	fbi->fb.fix.xpanstep	= 0;
-	fbi->fb.fix.ypanstep	= 0;
+	fbi->fb.fix.ypanstep	= 1;
 	fbi->fb.fix.ywrapstep	= 0;
 	fbi->fb.fix.accel	= FB_ACCEL_NONE;
 
@@ -1818,7 +1841,7 @@ static int __devinit pxafb_probe(struct platform_device *dev)
 		goto failed_free_irq;
 	}
 
-	ret = pxafb_set_par(&fbi->fb);
+	ret = pxafb_set_par_init(&fbi->fb);
 	if (ret) {
 		dev_err(&dev->dev, "Failed to set parameters\n");
 		goto failed_free_irq;
