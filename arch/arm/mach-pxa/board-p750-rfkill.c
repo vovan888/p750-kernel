@@ -1,7 +1,7 @@
 /* Control wireless devices power for p750 platform 
  * Copyright (C) Vladimir Ananiev <vovan888@gmail.com>
- * based on board-trout-rfkill.c
  *
+ * based on board-trout-rfkill.c
  * Copyright (C) 2008 Google, Inc.
  * Author: Nick Pelly <npelly@google.com>
  *
@@ -15,6 +15,7 @@
  * GNU General Public License for more details.
  *
  */
+#define DEBUG 1
 
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -34,6 +35,7 @@ static struct rfkill *gps_rfk;
 
 static int bluetooth_set_power(void *data, enum rfkill_state state)
 {
+	dev_dbg(NULL, "bluetooth_set_power, state = %d\n", state);
 	switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
 		gpio_set_value(EGPIO_P750_BT_PWREN, 0);
@@ -55,6 +57,7 @@ static int bluetooth_set_power(void *data, enum rfkill_state state)
 
 static int wifi_set_power(void *data, enum rfkill_state state)
 {
+	dev_dbg(NULL, "wifi_set_power, state = %d\n", state);
 	switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
 		gpio_set_value(GPIO15_P750_WIFI_UNK1, 1);
@@ -79,6 +82,7 @@ static int wifi_set_power(void *data, enum rfkill_state state)
 
 static int gps_set_power(void *data, enum rfkill_state state)
 {
+	dev_dbg(NULL, "gps_set_power, state = %d\n", state);
 	switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
 		gpio_set_value(EGPIO_P750_GPS_PWREN, 0);
@@ -100,6 +104,7 @@ static int gps_set_power(void *data, enum rfkill_state state)
 
 static int gsm_set_power(void *data, enum rfkill_state state)
 {
+	dev_dbg(NULL, "gsm_set_power, state = %d\n", state);
 	/*TODO*/
 	switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
@@ -116,11 +121,14 @@ static int gsm_set_power(void *data, enum rfkill_state state)
 
 static int p750_allocate_rfkill(struct device *dev, struct rfkill *rfkdev, char *name, int type, void *toggle_func)
 {
-	int rc = 0;
+	int rc;
 
+	dev_dbg(NULL, "p750_allocate_rfkill\n");
 	rfkdev = rfkill_allocate(dev, type);
-	if (!rfkdev)
+	if (!rfkdev) {
+		printk(KERN_ERR "error allocating %s \n", name);
 		return -ENOMEM;
+	}
 
 	rfkdev->name = name;
 	rfkdev->state = RFKILL_STATE_SOFT_BLOCKED;
@@ -142,7 +150,7 @@ static int p750_allocate_rfkill(struct device *dev, struct rfkill *rfkdev, char 
 
 static int __init p750_rfkill_probe(struct platform_device *pdev)
 {
-	int rc = 0;
+	int rc;
 
 	/* default to bluetooth off */
 	rfkill_switch_all(RFKILL_TYPE_BLUETOOTH, RFKILL_STATE_SOFT_BLOCKED);

@@ -8,6 +8,7 @@
  * published by the Free Software Foundation.
  *
  */
+#define DEBUG 1
 
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -247,7 +248,7 @@ struct pxafb_mode_info p750_fb_modes[] = {
 		.left_margin    = 1,
 		.right_margin   = 2,
 		.hsync_len      = 42,
-		.upper_margin   = 93,
+		.upper_margin   = 2,	/* 93 */
 		.lower_margin   = 2,
 		.vsync_len      = 2,
 		.sync		= 0,
@@ -270,26 +271,42 @@ struct pxafb_mode_info p750_fb_modes[] = {
 	},
 };
 
+static void p750_lcd_on(void)
+{
+	pr_debug("Toppoly LCD power : on\n");
+	gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
+	msleep(10);
+	gpio_set_value(EGPIO_P750_LCD_PWREN, 1);
+	msleep(10);
+	gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
+	msleep(150);
+}
+
+static void p750_lcd_off(void)
+{
+	pr_debug("Toppoly LCD power : off\n");
+	gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
+	msleep(2);
+	gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
+	msleep(2);
+	gpio_set_value(EGPIO_P750_LCD_PWREN, 0);	
+	msleep(150);
+}
+
 static void asusp750_lcd_power(int on, struct fb_var_screeninfo *si)
 {
-	pr_debug("Toppoly LCD power\n");
-	return;
-	if (on) {
-		pr_debug("on\n");
-		gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
-		msleep(10);
-		gpio_set_value(EGPIO_P750_LCD_PWREN, 1);
-		msleep(10);
-		gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
-		msleep(150);
-	} else {
-		pr_debug("off\n");
-		gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
-		msleep(2);
-		gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
-		msleep(2);
-		gpio_set_value(EGPIO_P750_LCD_PWREN, 0);
+	static int first_boot = 1;
+
+	/* if we boot from wince try to power off panel first to reset jbt6k74 */
+	if (first_boot && on) {
+		first_boot = 0;
+		p750_lcd_off();
 	}
+
+	if (on) 
+		p750_lcd_on();
+	else
+		p750_lcd_off();
 }
 
 static struct pxafb_mach_info p750_fb_info  = {
@@ -546,7 +563,7 @@ const struct jbt6k74_platform_data p750_jbt6k74_pdata = {
 	.resuming	= p750_jbt6k74_resuming,
 };
 
-static struct pxa2xx_spi_master pxa_spi2_master_info = {
+static struct pxa2xx_spi_master p750_spi2_master_info = {
 	.num_chipselect	= 1,
 	.enable_dma	= 0,
 };
@@ -562,7 +579,7 @@ static struct pxa2xx_spi_chip p750_gsmserial_chip = {
 	.cs_control	= p750_gsm_cs,
 };
 
-static struct pxa2xx_spi_master pxa_spi3_master_info = {
+static struct pxa2xx_spi_master p750_spi3_master_info = {
 	.num_chipselect	= 1,
 	.enable_dma	= 0,
 };
@@ -571,7 +588,7 @@ static struct spi_board_info p750_spi_board_info[] = {
 	{
 		.modalias	= "jbt6k74",
 		.platform_data	= &p750_jbt6k74_pdata,
-		.max_speed_hz	= 10 * 1000 * 1000,
+		.max_speed_hz	= 1000 * 1000,
 		.bus_num	= 2,
 	}, {
 		.modalias	= "spidev",
@@ -621,7 +638,7 @@ static struct pxaohci_platform_data p750_ohci_info = {
 	.power_budget	= 0,
 };
 
-struct gpio_ress global_gpios[] = {
+struct gpio_ress p750_global_gpios[] = {
 	P750_GPIO_IN(GPIO12_P750_USB_CABLE_DETECT, "USB detect"),
 	P750_GPIO_IN(GPIO13_P750_AC_ADAPTER_DETECT, "AC detect"),
 	P750_GPIO_IN(GPIO18_P750_MODEM_RDY, "Modem ready"),
@@ -661,10 +678,10 @@ static void __init p750_init (void)
 {
 	p750_hw_init();
 	pxa2xx_mfp_config(ARRAY_AND_SIZE(p750_pin_config));
-	p750_gpio_request(ARRAY_AND_SIZE(global_gpios));
+	p750_gpio_request(ARRAY_AND_SIZE(p750_global_gpios));
 
-	pxa2xx_set_spi_info(2, &pxa_spi2_master_info);
-	pxa2xx_set_spi_info(3, &pxa_spi3_master_info);
+	pxa2xx_set_spi_info(2, &p750_spi2_master_info);
+	pxa2xx_set_spi_info(3, &p750_spi3_master_info);
 	spi_register_board_info(p750_spi_board_info, ARRAY_SIZE(p750_spi_board_info));
 
 	set_pxa_fb_info(&p750_fb_info);
