@@ -49,6 +49,7 @@
 #include "generic.h"
 #include "devices.h"
 
+struct jbt_info *jbt;
 
 static unsigned long p750_pin_config[] = {
 	/* Global */
@@ -274,17 +275,24 @@ struct pxafb_mode_info p750_fb_modes[] = {
 static void p750_lcd_on(void)
 {
 	pr_debug("Toppoly LCD power : on\n");
+
 	gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
 	msleep(10);
 	gpio_set_value(EGPIO_P750_LCD_PWREN, 1);
 	msleep(10);
 	gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
 	msleep(150);
+
+	if (jbt)
+		jbt6k74_enter_state(jbt, JBT_STATE_NORMAL);
 }
 
 static void p750_lcd_off(void)
 {
 	pr_debug("Toppoly LCD power : off\n");
+	if (jbt)
+		jbt6k74_enter_state(jbt, JBT_STATE_DEEP_STANDBY);
+
 	gpio_set_value(EGPIO_P750_LCD_RESET_N, 1);
 	msleep(2);
 	gpio_set_value(EGPIO_P750_LCD_RESET_N, 0);
@@ -378,7 +386,10 @@ static void mci_setpower(struct device *dev, unsigned int vdd)
 {
 	struct pxamci_platform_data *pdata = dev->platform_data;
 
-	gpio_set_value(EGPIO_P750_SDCARD_PWREN, (1 << vdd) & pdata->ocr_mask);
+	if ((1 << vdd) & pdata->ocr_mask)
+		gpio_set_value(EGPIO_P750_SDCARD_PWREN, 1);
+	else
+		gpio_set_value(EGPIO_P750_SDCARD_PWREN, 0);
 }
 
 static int mci_get_ro(struct device *dev)
@@ -558,9 +569,23 @@ static void p750_jbt6k74_resuming(int devidx)
 	//p750bl_deferred_resume();
 }
 
+static void p750_jbt6k74_probe_completed(struct device *dev)
+{
+	printk(KERN_DEBUG "p750_jbt6k74_probe_completed\n");
+	jbt = dev_get_drvdata(dev);
+}
+
+static int p750_jbt6k74_power_status(int devidx)
+{
+	printk(KERN_DEBUG "p750_jbt6k74_power_status\n");
+	return gpio_get_value(EGPIO_P750_LCD_PWREN);
+}
+
 const struct jbt6k74_platform_data p750_jbt6k74_pdata = {
 	.reset		= p750_jbt6k74_reset,
 	.resuming	= p750_jbt6k74_resuming,
+	.probe_completed= p750_jbt6k74_probe_completed,
+	.get_power_status=p750_jbt6k74_power_status,
 };
 
 static struct pxa2xx_spi_master p750_spi2_master_info = {

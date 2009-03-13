@@ -96,13 +96,6 @@ enum jbt_register {
 
 };
 
-enum jbt_state {
-	JBT_STATE_DEEP_STANDBY,
-	JBT_STATE_SLEEP,
-	JBT_STATE_NORMAL,
-	JBT_STATE_QVGA_NORMAL,
-};
-
 static const char *jbt_state_names[] = {
 	[JBT_STATE_DEEP_STANDBY]	= "deep-standby",
 	[JBT_STATE_SLEEP]		= "sleep",
@@ -110,19 +103,8 @@ static const char *jbt_state_names[] = {
 	[JBT_STATE_QVGA_NORMAL]		= "qvga-normal",
 };
 
-struct jbt_info {
-	enum jbt_state state, normal_state;
-	struct spi_device *spi_dev;
-	struct mutex lock;		/* protects tx_buf and reg_cache */
-	struct notifier_block fb_notif;
-	u16 tx_buf[8];
-	u16 reg_cache[0xEE];
-	int have_resumed;
-};
-
 #define JBT_COMMAND	0x000
 #define JBT_DATA	0x100
-
 
 static int jbt_reg_write_nodata(struct jbt_info *jbt, u8 reg)
 {
@@ -333,10 +315,19 @@ static int sleep_to_standby(struct jbt_info *jbt)
 /* frontend function */
 int jbt6k74_enter_state(struct jbt_info *jbt, enum jbt_state new_state)
 {
-	int rc = -EINVAL;
+	int rc = -EINVAL, is_lcd_powered;
+	struct jbt6k74_platform_data *jbt6k74_pdata = jbt->spi_dev->dev.platform_data;
 
 	dev_dbg(&jbt->spi_dev->dev, "entering (old_state=%s, "
 		"new_state=%s)\n", jbt_state_names[jbt->state], jbt_state_names[new_state]);
+
+	if (jbt6k74_pdata->get_power_status) {
+		is_lcd_powered = (jbt6k74_pdata->get_power_status)(0);
+		if (!is_lcd_powered) {
+			printk(KERN_DEBUG "calling jbt6k74_enter_state while LCD is off\n");
+			return 0;
+		}
+	}
 
 	mutex_lock(&jbt->lock);
 
