@@ -295,6 +295,22 @@ config KEYBOARD_GPIO
 	  To compile this driver as a module, choose M here: the
 	  module will be called gpio-keys.
 
+config KEYBOARD_GPIO_JOYSTICK
+	tristate "GPIO Joystick with single interrupt"
+	depends on GENERIC_GPIO
+	help
+	  This driver implements support for joystick connected
+	  to GPIO pins.
+
+	  Say Y here if your device has joystick connected
+	  directly to such GPIO pins.  Your board-specific
+	  setup logic must also provide a platform device,
+	  with configuration data saying which GPIOs are used.
+	  Currently used in Asus P750 PDA.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called gpio-joystick.
+
 config KEYBOARD_MAPLE
 	tristate "Maple bus keyboard"
 	depends on SH_DREAMCAST && MAPLE
