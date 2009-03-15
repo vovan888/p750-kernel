@@ -152,18 +152,28 @@ static int egpio_get(struct gpio_chip *chip, unsigned offset)
 	unsigned           bit;
 	int                reg;
 	int                value;
+	int                bit_value;
 
 	pr_debug("egpio_get_value(%d)\n", chip->base + offset);
 
 	egpio = container_of(chip, struct egpio_chip, chip);
-	ei    = dev_get_drvdata(egpio->dev);
-	bit   = egpio_bit(ei, offset);
-	reg   = egpio->reg_start + egpio_pos(ei, offset);
+	if (test_bit(offset, &egpio->is_out)) {
+		/* bit configured as output, read from cache */
+		bit_value = egpio->cached_values & (1 << offset);
+		pr_debug("read cached(%x) = %x\n",
+				offset, bit_value);
+	} else {
+		ei    = dev_get_drvdata(egpio->dev);
+		bit   = egpio_bit(ei, offset);
+		reg   = egpio->reg_start + egpio_pos(ei, offset);
+	
+		value = egpio_readw(ei, reg);
+		pr_debug("readw(%p + %x) = %x\n",
+				ei->base_addr, reg << ei->bus_shift, value);
+		bit_value = value & bit;
+	}
 
-	value = egpio_readw(ei, reg);
-	pr_debug("readw(%p + %x) = %x\n",
-			ei->base_addr, reg << ei->bus_shift, value);
-	return value & bit;
+	return bit_value;
 }
 
 static int egpio_direction_input(struct gpio_chip *chip, unsigned offset)
