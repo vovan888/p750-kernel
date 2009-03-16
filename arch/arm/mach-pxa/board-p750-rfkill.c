@@ -105,8 +105,7 @@ static int gps_set_power(void *data, enum rfkill_state state)
 static int gsm_set_power(void *data, enum rfkill_state state)
 {
 	dev_dbg(NULL, "gsm_set_power, state = %d\n", state);
-	/*TODO*/
-	switch (state) {
+	 /*TODO*/ switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
 		gpio_set_value(EGPIO_P750_BCR_MODEM_PWRON, 1);
 		break;
@@ -119,7 +118,8 @@ static int gsm_set_power(void *data, enum rfkill_state state)
 	return 0;
 }
 
-static int p750_allocate_rfkill(struct device *dev, struct rfkill *rfkdev, char *name, int type, void *toggle_func)
+static int p750_allocate_rfkill(struct device *dev, struct rfkill *rfkdev,
+				char *name, int type, void *toggle_func)
 {
 	int rc;
 
@@ -135,7 +135,7 @@ static int p750_allocate_rfkill(struct device *dev, struct rfkill *rfkdev, char 
 	/* userspace cannot take exclusive control */
 	rfkdev->user_claim_unsupported = 1;
 	rfkdev->user_claim = 0;
-	rfkdev->data = NULL;  // user data
+	rfkdev->data = NULL;	// user data
 	rfkdev->toggle_radio = toggle_func;
 
 	rc = rfkill_register(rfkdev);
@@ -159,10 +159,17 @@ static int __init p750_rfkill_probe(struct platform_device *pdev)
 	gps_set_power(NULL, RFKILL_STATE_SOFT_BLOCKED);
 	gsm_set_power(NULL, RFKILL_STATE_SOFT_BLOCKED);
 
-	rc = p750_allocate_rfkill(&pdev->dev, bt_rfk, "bt-rfkill", RFKILL_TYPE_BLUETOOTH, bluetooth_set_power);
-	rc |= p750_allocate_rfkill(&pdev->dev, wifi_rfk, "wifi-rfkill", RFKILL_TYPE_WLAN, wifi_set_power);
-	rc |= p750_allocate_rfkill(&pdev->dev, gps_rfk, "gps-rfkill", RFKILL_TYPE_UWB, gps_set_power);
-	rc |= p750_allocate_rfkill(&pdev->dev, gsm_rfk, "gsm-rfkill", RFKILL_TYPE_WWAN, gsm_set_power);
+	rc = p750_allocate_rfkill(&pdev->dev, bt_rfk, "bt-rfkill",
+				  RFKILL_TYPE_BLUETOOTH, bluetooth_set_power);
+	rc |=
+	    p750_allocate_rfkill(&pdev->dev, wifi_rfk, "wifi-rfkill",
+				 RFKILL_TYPE_WLAN, wifi_set_power);
+	rc |=
+	    p750_allocate_rfkill(&pdev->dev, gps_rfk, "gps-rfkill",
+				 RFKILL_TYPE_UWB, gps_set_power);
+	rc |=
+	    p750_allocate_rfkill(&pdev->dev, gsm_rfk, "gsm-rfkill",
+				 RFKILL_TYPE_WWAN, gsm_set_power);
 
 	return rc;
 }
@@ -170,9 +177,9 @@ static int __init p750_rfkill_probe(struct platform_device *pdev)
 static struct platform_driver p750_rfkill_driver = {
 	.probe = p750_rfkill_probe,
 	.driver = {
-		.name = "p750_rfkill",
-		.owner = THIS_MODULE,
-	},
+		   .name = "p750_rfkill",
+		   .owner = THIS_MODULE,
+		   },
 };
 
 static int __init p750_rfkill_init(void)
