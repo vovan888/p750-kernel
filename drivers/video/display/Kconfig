@@ -32,4 +32,8 @@ config DISPLAY_JBT6K74
 	  The control interface is required for display operation, as it
 	  controls power management, display timing and gamma calibration.
 
+config DISPLAY_JBT6K74_FBNOTIFIER
+	bool "Framebuffer notifier support for TPO JBT6K74-AS"
+	depends on DISPLAY_JBT6K74
+
 endmenu

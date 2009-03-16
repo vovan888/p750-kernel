@@ -315,15 +315,15 @@ static int sleep_to_standby(struct jbt_info *jbt)
 /* frontend function */
 int jbt6k74_enter_state(struct jbt_info *jbt, enum jbt_state new_state)
 {
-	int rc = -EINVAL, is_lcd_powered;
+	int rc = -EINVAL, lcd_powered;
 	struct jbt6k74_platform_data *jbt6k74_pdata = jbt->spi_dev->dev.platform_data;
 
 	dev_dbg(&jbt->spi_dev->dev, "entering (old_state=%s, "
 		"new_state=%s)\n", jbt_state_names[jbt->state], jbt_state_names[new_state]);
 
 	if (jbt6k74_pdata->get_power_status) {
-		is_lcd_powered = (jbt6k74_pdata->get_power_status)(0);
-		if (!is_lcd_powered) {
+		lcd_powered = (jbt6k74_pdata->get_power_status)(0);
+		if (!lcd_powered) {
 			printk(KERN_DEBUG "calling jbt6k74_enter_state while LCD is off\n");
 			return 0;
 		}
@@ -556,6 +556,7 @@ static struct attribute_group jbt_attr_group = {
 	.attrs	= jbt_sysfs_entries,
 };
 
+#ifdef CONFIG_DISPLAY_JBT6K74_FBNOTIFIER
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {
@@ -587,13 +588,14 @@ static int fb_notifier_callback(struct notifier_block *self,
 		dev_info(&jbt->spi_dev->dev, "**** jbt6k74 powerdown\n");
 		/* FIXME DEEP STANDBY wihtout suspend causes WSOD at cold
 		 * temperature on certain devices. */
-		/*jbt6k74_enter_state(jbt, JBT_STATE_DEEP_STANDBY);*/
-		jbt6k74_enter_state(jbt, JBT_STATE_SLEEP);
+		jbt6k74_enter_state(jbt, JBT_STATE_DEEP_STANDBY);
+//		jbt6k74_enter_state(jbt, JBT_STATE_SLEEP);
 		break;
 	}
 
 	return 0;
 }
+#endif /*CONFIG_DISPLAY_JBT6K74_FBNOTIFIER*/
 
 /* linux device model infrastructure */
 
@@ -638,13 +640,14 @@ static int __devinit jbt_probe(struct spi_device *spi)
 		goto err_standby;
 	}
 
+#ifdef CONFIG_DISPLAY_JBT6K74_FBNOTIFIER
 	jbt->fb_notif.notifier_call = fb_notifier_callback;
-	rc = fb_register_client(&jbt->fb_notif);
-	if (rc < 0) {
-		dev_err(&spi->dev, "cannot register notifier\n");
-		goto err_sysfs;
-	}
-
+ 	rc = fb_register_client(&jbt->fb_notif);
+ 	if (rc < 0) {
+ 		dev_err(&spi->dev, "cannot register notifier\n");
+ 		goto err_sysfs;
+ 	}
+#endif
 	if (jbt6k74_pdata->probe_completed)
 		(jbt6k74_pdata->probe_completed)(&spi->dev);
 
@@ -669,7 +672,9 @@ static int __devexit jbt_remove(struct spi_device *spi)
 	 * accidentially onloads the module (whose use count normally is 0) */
 	jbt6k74_enter_state(jbt, jbt->normal_state);
 
+#ifdef CONFIG_DISPLAY_JBT6K74_FBNOTIFIER
 	fb_unregister_client(&jbt->fb_notif);
+#endif
 	sysfs_remove_group(&spi->dev.kobj, &jbt_attr_group);
 	dev_set_drvdata(&spi->dev, NULL);
 	kfree(jbt);
