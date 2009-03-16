@@ -110,4 +110,6 @@ source "drivers/xen/Kconfig"
 
 source "drivers/staging/Kconfig"
 
+source "drivers/android/Kconfig"
+
 endmenu

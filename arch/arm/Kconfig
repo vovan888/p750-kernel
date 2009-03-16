@@ -1278,6 +1278,8 @@ source "drivers/regulator/Kconfig"
 
 source "drivers/uio/Kconfig"
 
+source "drivers/android/Kconfig"
+
 endmenu
 
 source "fs/Kconfig"
