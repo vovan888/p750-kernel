@@ -183,13 +183,13 @@ static struct w1_family_ops w1_ds2780_fops = {
 };
 
 static struct w1_family w1_ds2780_family = {
-	.fid = W1_FAMILY_DS2760,	/* FIXME */
+	.fid = W1_FAMILY_DS2780,
 	.fops = &w1_ds2780_fops,
 };
 
 static int __init w1_ds2780_init(void)
 {
-	printk(KERN_INFO "1-Wire driver for the DS2780 battery monitor "
+	printk(KERN_INFO "1-Wire driver for the DS2780 battery monitor"
 	       " chip  - (c) 2009 Vladimir Ananiev\n");
 	idr_init(&bat_idr);
 	return w1_register_family(&w1_ds2780_family);
