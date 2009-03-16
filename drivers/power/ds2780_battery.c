@@ -227,7 +227,7 @@ static int ds2780_battery_probe(struct platform_device *pdev)
 {
 	int retval = 0;
 	struct ds2780_device_info *di;
-	struct ds2780_platform_data *pdata;
+//	struct ds2780_platform_data *pdata;
 
 	di = kzalloc(sizeof(*di), GFP_KERNEL);
 	if (!di) {
@@ -237,7 +237,7 @@ static int ds2780_battery_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, di);
 
-	pdata = pdev->dev.platform_data;
+//	pdata = pdev->dev.platform_data;
 	di->dev			= &pdev->dev;
 	di->w1_dev		= pdev->dev.parent;
 	di->bat.name		= pdev->dev.bus_id;
