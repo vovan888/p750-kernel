@@ -52,6 +52,17 @@ config W1_MASTER_GPIO
 	  This support is also available as a module.  If so, the module
 	  will be called w1-gpio.ko.
 
+config W1_MASTER_GPIO2
+	tristate "GPIO 1-wire busmaster with separate GPIOs"
+	depends on GENERIC_GPIO
+	help
+	  Say Y here if you want to communicate with your 1-wire devices using
+	  two GPIO pins - one to read bus state and second to write to bus.
+	  This driver uses the GPIO API to control the wire.
+
+	  This support is also available as a module.  If so, the module
+	  will be called w1-gpio2.ko.
+
 config HDQ_MASTER_OMAP
 	tristate "OMAP HDQ driver"
 	depends on ARCH_OMAP2430 || ARCH_OMAP34XX
