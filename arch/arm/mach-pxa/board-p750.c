@@ -16,6 +16,7 @@
 #include <linux/sysdev.h>
 #include <linux/input.h>
 #include <linux/delay.h>
+#include <linux/timer.h>
 #include <linux/pwm_backlight.h>
 #include <linux/rtc.h>
 #include <linux/leds.h>
@@ -30,7 +31,7 @@
 #include <linux/wm97xx.h>
 #include <linux/mtd/physmap.h>
 #include <linux/mfd/htc-egpio.h>
-#include <linux/w1-gpio.h>
+#include <linux/w1-gpio2.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -102,10 +103,12 @@ static unsigned long p750_pin_config[] = {
 
 	/* STUART - Battery */
 /*	GPIO46_STUART_RXD,
-	GPIO47_STUART_TXD,*/
+	GPIO47_STUART_TXD,
 	MFP_CFG_IN(GPIO46, AF0),
-	MFP_CFG_OUT(GPIO47, AF0, DRIVE_HIGH),
-
+	MFP_CFG_OUT(GPIO47, AF0, DRIVE_HIGH), */
+	GPIO46_GPIO,
+	GPIO47_GPIO, 
+	
 	/* FFUART - GSM */
 	GPIO34_FFUART_RXD,
 	GPIO35_FFUART_CTS,
@@ -453,15 +456,16 @@ static struct pxamci_platform_data p750_mci_info = {
 /******************************************************************************/
 static int usb_connected;
 static int ac_connected;
+static struct timer_list usb_detect_timer;
 
-static irqreturn_t usb_detect_handler(int irq, void *dev_id)
+static void usb_detect_timer_func(unsigned long unused)
 {
 	int val = 0;
-	printk(KERN_DEBUG "usb_detect_handler\n");
 	if (gpio_get_value(GPIO12_P750_USB_CABLE_DETECT)) {
-		gpio_set_value(EGPIO_P750_USB_PULL_DPLUS, 1);
+//		gpio_set_value(EGPIO_P750_USB_PULL_DPLUS, 1);
+//		msleep(20);
 		val = gpio_get_value(GPIO19_P750_AC_ADAPTER_DETECT);
-		gpio_set_value(EGPIO_P750_USB_PULL_DPLUS, 0);
+//		gpio_set_value(EGPIO_P750_USB_PULL_DPLUS, 0);
 		if (val)
 			ac_connected = 1;
 		else
@@ -470,7 +474,15 @@ static irqreturn_t usb_detect_handler(int irq, void *dev_id)
 		usb_connected = 0;
 		ac_connected = 0;
 	}
-	
+	printk(KERN_DEBUG "usb_detect_timer_func ac=%x, usb=%x\n", ac_connected,
+			usb_connected);
+}
+
+static irqreturn_t usb_detect_handler(int irq, void *dev_id)
+{
+	/* wait 200 msecs before reading cable status*/
+	mod_timer(&usb_detect_timer, jiffies + msecs_to_jiffies(200));
+
 	return IRQ_HANDLED;
 }
 
@@ -484,7 +496,9 @@ static int p750_usb_detect_init(struct device *dev)
 			 IRQF_DISABLED | IRQF_TRIGGER_RISING |
 			 IRQF_TRIGGER_FALLING, "USB-AC detect", NULL);
 	if (!rc) {
-		usb_detect_handler(0, NULL);
+		usb_detect_timer_func(0);
+		setup_timer(&usb_detect_timer, usb_detect_timer_func, 0);
+
 		usb_connected = 0;
 		ac_connected = 0;
 	}
@@ -529,10 +543,9 @@ static struct pxa2xx_udc_mach_info p750_udc_info = {
 
 /* DS2780 battery and w1 master */
 /******************************************************************************/
-static struct w1_gpio_platform_data p750_w1_gpio_pdata = {
-	/*FIXME*/
-	.pin = GPIO46_P750_STUART_RXD,
-	.is_open_drain = 0,
+static struct w1_gpio2_platform_data p750_w1_gpio2_pdata = {
+	.pin_read = GPIO46_P750_STUART_RXD,
+	.pin_write = GPIO47_P750_STUART_TXD,
 };
 
 /* Power Supply */
@@ -699,7 +712,7 @@ P750_SIMPLE_DEV(p750_gpio_joystick, "gpio-joystick", &p750_gpio_joystick_pdata);
 P750_PARENT_DEV(p750_backlight, "pwm-backlight", &pxa27x_device_pwm0.dev,
 		&p750_backlight_data);
 P750_SIMPLE_DEV(p750_led, "leds-gpio", &gpio_led_info);
-P750_SIMPLE_DEV(p750_w1_gpio,	"w1-gpio",	    &p750_w1_gpio_pdata);
+P750_SIMPLE_DEV(p750_w1_gpio2,	"w1-gpio2",	    &p750_w1_gpio2_pdata);
 P750_SIMPLE_DEV(p750_board, "p750-board", NULL);
 
 static struct platform_device *p750_devices[] __initdata = {
@@ -708,7 +721,7 @@ static struct platform_device *p750_devices[] __initdata = {
 	&p750_gpio_joystick,
 	&p750_backlight,
 	&p750_led,
-	&p750_w1_gpio,
+	&p750_w1_gpio2,
 	&power_dev,
 	&p750_board,
 };
@@ -775,10 +788,7 @@ static void __init p750_init(void)
 	pxa_set_ac97_info(&p750_audio_ops);
 	pxa_set_udc_info(&p750_udc_info);
 	pxa_set_ohci_info(&p750_ohci_info);
-//      pm_power_off = p750_poweroff;
-//      arm_pm_restart = p750_restart;
 	platform_add_devices(p750_devices, ARRAY_SIZE(p750_devices));
-//      gsm_init();
 }
 
 /***********************************************************/
