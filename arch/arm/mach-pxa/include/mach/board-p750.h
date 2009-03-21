@@ -64,6 +64,7 @@
 /* CPLD EGPIOs */
 
 #define P750_EGPIO_BASE			0x80 /* GPIO_BOARD_START */
+#define P750_EGPIO_END			0xC0
 #define P750_EGPIO(reg,bit) \
 	(P750_EGPIO_BASE + 8*reg + bit)
 

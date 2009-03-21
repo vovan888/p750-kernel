@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/sysdev.h>
 #include <linux/input.h>
+#include <linux/i2c/lm8333.h>
 #include <linux/delay.h>
 #include <linux/timer.h>
 #include <linux/pwm_backlight.h>
@@ -343,7 +344,7 @@ static struct gpio_keys_button p750_button_table[] = {
 	{KEY_SEND, GPIO97_P750_BUTTON_GREEN, 0, "Green button", EV_KEY},
 	{KEY_END, GPIO102_P750_BUTTON_RED, 0, "Hangup button", EV_KEY},
 	{KEY_MENU, GPIO99_P750_BUTTON_MODE, 0, "Mode  button", EV_KEY},
-	{KEY_F1, GPIO100_P750_BUTTON_OK, 0, "OK button", EV_KEY},
+	{KEY_BACK, GPIO100_P750_BUTTON_OK, 0, "OK button", EV_KEY},
 	{KEY_RECORD, GPIO98_P750_BUTTON_RECORD, 0, "Record button", EV_KEY},
 	{KEY_F2, GPIO91_P750_BUTTON_HOLD, 0, "Hold button", EV_KEY},
 	{KEY_CAMERA - 1, GPIO86_P750_BUTTON_CAMERA_HALF, 0, "Camera focus",
@@ -366,6 +367,50 @@ static struct gpio_joystick_platform_data p750_gpio_joystick_pdata = {
 	.gpios = {GPIO107_P750_JOY_PUSH, GPIO103_P750_JOY_NW, GPIO104_P750_JOY_NE,
 		GPIO105_P750_JOY_SE, GPIO106_P750_JOY_SW},
 	.keycodes = {KEY_ENTER, KEY_UP, KEY_LEFT, KEY_DOWN, KEY_RIGHT},
+};
+
+/* LM8333 keypad */
+/******************************************************************************/
+static unsigned int p750_lm8333_keymap[] = {
+	LM8333_KEY(0x22, KEY_1),
+	LM8333_KEY(0x23, KEY_2),
+	LM8333_KEY(0x24, KEY_3),
+	LM8333_KEY(0x42, KEY_4),
+	LM8333_KEY(0x43, KEY_5),
+	LM8333_KEY(0x44, KEY_6),
+	LM8333_KEY(0x62, KEY_7),
+	LM8333_KEY(0x63, KEY_8),
+	LM8333_KEY(0x64, KEY_9),
+	LM8333_KEY(0x72, KEY_KPASTERISK),
+	LM8333_KEY(0x73, KEY_0),
+	LM8333_KEY(0x74, KEY_SPACE),
+	LM8333_KEY(0x02, KEY_LEFTSHIFT),	/* left softkey */
+	LM8333_KEY(0x04, KEY_LEFTALT),	/* right softkey */
+	LM8333_KEY(0x06, KEY_VOLUMEUP),	/* volume up */
+	LM8333_KEY(0x16, KEY_ENTER),	/* volume press */
+	LM8333_KEY(0x26, KEY_VOLUMEDOWN),/* volume down */
+	LM8333_KEY(0x25, KEY_HOME),	/* start menu */
+	LM8333_KEY(0x45, KEY_BACKSPACE),/* clear */
+};
+
+static struct lm8333_i2c_platform_data p750_lm8333_i2c_pdata = {
+	.active_time	= 500,
+};
+
+static struct lm8333_keypad_platform_data p750_lm8333_keypad_pdata = {
+	.key_map	= p750_lm8333_keymap,
+	.key_map_size	= ARRAY_SIZE(p750_lm8333_keymap),
+	.debounce_time	= 10,
+};
+
+struct lm8333_gpio_platform_data p750_lm8333_gpio_pdata = {
+	.gpio_base	= P750_EGPIO_END,
+};
+
+static struct lm8333_platform_data p750_lm8333_pdata = {
+	.i2c_adapter_id	= 0,
+	.irq		= gpio_to_irq(GPIO40_P750_KEYPAD_IRQ),
+	.lm8333_i2c_pdata = &p750_lm8333_i2c_pdata,
 };
 
 /* Leds and vibrator */
@@ -498,9 +543,6 @@ static int p750_usb_detect_init(struct device *dev)
 	if (!rc) {
 		usb_detect_timer_func(0);
 		setup_timer(&usb_detect_timer, usb_detect_timer_func, 0);
-
-		usb_connected = 0;
-		ac_connected = 0;
 	}
 	return rc;
 }
@@ -713,15 +755,26 @@ P750_PARENT_DEV(p750_backlight, "pwm-backlight", &pxa27x_device_pwm0.dev,
 		&p750_backlight_data);
 P750_SIMPLE_DEV(p750_led, "leds-gpio", &gpio_led_info);
 P750_SIMPLE_DEV(p750_w1_gpio2,	"w1-gpio2",	    &p750_w1_gpio2_pdata);
+P750_SIMPLE_DEV(p750_rfkill, "p750-rfkill", NULL);
 P750_SIMPLE_DEV(p750_board, "p750-board", NULL);
+
+P750_SIMPLE_DEV(p750_lm8333, "lm8333", &p750_lm8333_pdata);
+P750_PARENT_DEV(p750_lm8333_keypad, "lm8333-keypad", &p750_lm8333.dev,
+		&p750_lm8333_keypad_pdata);
+P750_PARENT_DEV(p750_lm8333_gpio, "lm8333-gpio", &p750_lm8333.dev,
+		&p750_lm8333_gpio_pdata);
 
 static struct platform_device *p750_devices[] __initdata = {
 	&egpio,
 	&p750_gpio_keys,
 	&p750_gpio_joystick,
+	&p750_lm8333,
 	&p750_backlight,
 	&p750_led,
 	&p750_w1_gpio2,
+	&p750_lm8333_keypad,
+	&p750_lm8333_gpio,
+	&p750_rfkill,
 	&power_dev,
 	&p750_board,
 };
@@ -785,6 +838,7 @@ static void __init p750_init(void)
 	set_pxa_fb_info(&p750_fb_info);
 	pxa_set_mci_info(&p750_mci_info);
 	pxa_set_i2c_info(NULL);
+	pxa27x_set_i2c_power_info(NULL);
 	pxa_set_ac97_info(&p750_audio_ops);
 	pxa_set_udc_info(&p750_udc_info);
 	pxa_set_ohci_info(&p750_ohci_info);
