@@ -339,4 +339,16 @@ config KEYBOARD_SH_KEYSC
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called sh_keysc.
+
+config KEYBOARD_LM8333
+	tristate "Keypad driver for LM8333 chip"
+	depends on I2C
+	select LM8333
+	help
+	  Say Y here if you want to use a keypad attached to the LM8333 chip.
+	  Platform data should provide keymap.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called sh_keysc.
+
 endif
