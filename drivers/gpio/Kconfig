@@ -142,6 +142,14 @@ config GPIO_TWL4030
 	  Say yes here to access the GPIO signals of various multi-function
 	  power management chips from Texas Instruments.
 
+config GPIO_LM8333
+	tristate "LM8333 GPIOs support"
+	depends on I2C
+	select LM8333
+	help
+	  Say yes here to access the GPIO lines on National Semiconductor
+	  LM8333 chip.
+
 comment "PCI GPIO expanders:"
 
 config GPIO_BT8XX
