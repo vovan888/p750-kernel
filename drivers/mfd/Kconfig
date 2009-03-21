@@ -153,6 +153,23 @@ config MFD_WM8350_I2C
 	  I2C as the control interface.  Additional options must be
 	  selected to enable support for the functionality of the chip.
 
+config LM8333
+	tristate "National Semiconductor LM8333 support"
+	depends on I2C
+	help
+	  If you say yes here you get support for National LM8333 chips.
+	  These chips have interrupt capable keypad controller, 4 gpio
+	  lines, 1 PWM interface.
+	  This driver provides i2c device and GPIO lines support.
+	  Interrupts on GPIO change and PWM interface are not currently
+	  supported.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called lm8333.
+
+	  These devices are hard to detect and rarely found on mainstream
+	  hardware.  If unsure, say N.
+
 endmenu
 
 menu "Multimedia Capabilities Port drivers"
